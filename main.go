@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-
+	"os"
 	"zombiezen.com/go/sqlite"
 	"zombiezen.com/go/sqlite/sqlitex"
 )
@@ -19,7 +19,11 @@ func main() {
 		log.Fatal(err)
 	}
 	http.HandleFunc("/", handle)
-	log.Fatal(http.ListenAndServe(":80", nil))
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	log.Fatal(http.ListenAndServe(":"+port, nil))
 }
 
 func handle(w http.ResponseWriter, r *http.Request) {
