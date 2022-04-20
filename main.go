@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -23,10 +24,63 @@ func main() {
 	if port == "" {
 		port = "8080"
 	}
+
+	conn := dbpool.Get(context.TODO())
+	if conn == nil {
+		return
+	}
+	defer dbpool.Put(conn)
+	// Execute a query.
+	// Can I inject the "app name" into the table name - like "foo123-mylist"?
+	sql := "CREATE TABLE mylist (item string, priority string);"
+	   fmt.Println("Initializing new in memory 'mylist' TABLE")
+	err = sqlitex.ExecuteTransient(conn, sql, &sqlitex.ExecOptions{
+	  ResultFunc: func(stmt *sqlite.Stmt) error {
+	    fmt.Println("RESULT")
+	    fmt.Println(stmt.ColumnText(0))
+	    return nil
+	  },
+	})
+	if err != nil {
+	  fmt.Println("ERROR")
+          fmt.Println(err)
+	  //return err
+	}
 	log.Fatal(http.ListenAndServe(":"+port, nil))
 }
 
+func getMyList(conn *sqlite.Conn, w http.ResponseWriter) {
+
+
+	stmt, err := conn.Prepare("SELECT item, priority from mylist;")
+	if err != nil {
+        	fmt.Println(err)
+	  	fmt.Fprint(w,err)
+	}
+	for {
+		hasRow, err := stmt.Step()
+		if err != nil {
+			fmt.Println(err)
+			fmt.Fprint(w,err)
+		}
+		if !hasRow {
+			break
+		}
+		itemInfo := fmt.Sprintf("[%s]:%s", stmt.GetText("item"), stmt.GetText("priority"))
+	    	fmt.Println( itemInfo )
+	    	fmt.Fprint(w, itemInfo )
+		
+		
+	}
+
+}
+
 func handle(w http.ResponseWriter, r *http.Request) {
+ 	//io.WriteString(res, "name: "+req.FormValue("name"))
+    	//io.WriteString(res, "\nphone: "+req.FormValue("phone"))
+ 	item := r.FormValue("i")
+	priority := r.FormValue("p")	
+	fmt.Printf("Adding new item(%s): %s", priority, item)
 	conn := dbpool.Get(r.Context())
 	if conn == nil {
 		return
@@ -34,6 +88,32 @@ func handle(w http.ResponseWriter, r *http.Request) {
 	defer dbpool.Put(conn)
 	// Execute a query.
 	var err error
+
+	stmt, err := conn.Prepare("INSERT INTO mylist (item, priority) VALUES ($f1, $f2);")
+	if err != nil {
+		fmt.Println(err)
+		fmt.Fprint(w,err)
+		return
+	}
+	stmt.SetText("$f1", item)
+	stmt.SetText("$f2", priority)
+	//stmt.SetInt64("$f2", int64(i))
+	hasRow, err := stmt.Step()
+	if err != nil {
+		fmt.Println(err)
+		fmt.Fprint(w,err)
+	}
+	if hasRow {
+		fmt.Println("hasRow???? IDK ----->>>> ")
+		fmt.Fprint(w,"hasRow???? IDK ----->>>> ")
+
+	}
+
+	if err := stmt.Finalize(); err != nil {
+		fmt.Println(err)
+		fmt.Fprint(w,err)
+	}
+
 	sqlNowHere := "SELECT datetime('now','-1 day','localtime');"
 	err = sqlitex.ExecuteTransient(conn, sqlNowHere, &sqlitex.ExecOptions{
 	  ResultFunc: func(stmt *sqlite.Stmt) error {
@@ -43,6 +123,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 	    //fmt.Fprintf(w, "Hello, %q", stmt.ColumnText(0))
 	    fmt.Println(messageBack)
 	    fmt.Fprint(w, messageBack)
+	    getMyList(conn, w)	    
 	    return nil
 	  },
 	})
