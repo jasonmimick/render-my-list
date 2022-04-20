@@ -34,9 +34,15 @@ func handle(w http.ResponseWriter, r *http.Request) {
 	defer dbpool.Put(conn)
 	// Execute a query.
 	var err error
-	err = sqlitex.ExecuteTransient(conn, "SELECT 'hello, world';", &sqlitex.ExecOptions{
+	sqlNowHere := "SELECT datetime('now','-1 day','localtime');"
+	err = sqlitex.ExecuteTransient(conn, sqlNowHere, &sqlitex.ExecOptions{
 	  ResultFunc: func(stmt *sqlite.Stmt) error {
-	    fmt.Println(stmt.ColumnText(0))
+	    w.Header().Set("Content-Type","application/text")
+	    messageBack := fmt.Sprintf("Hello! Its %s here how, what time is it for you?", stmt.ColumnText(0))
+	    //fmt.Println(stmt.ColumnText(0))
+	    //fmt.Fprintf(w, "Hello, %q", stmt.ColumnText(0))
+	    fmt.Println(messageBack)
+	    fmt.Fprint(w, messageBack)
 	    return nil
 	  },
 	})
