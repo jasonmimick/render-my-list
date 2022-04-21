@@ -93,10 +93,16 @@ func handle(w http.ResponseWriter, r *http.Request) {
 	if conn == nil {
 		return
 	}
-    //runMySql(showTablesSql,conn,w)
-	// Execute a query.
-	var err error
-
+    if item != "" {
+        addItem(conn, item, priority, w)
+    } else {
+        fmt.Println("item was empty, not adding")
+    }
+    response(conn, w)
+	defer dbpool.Put(conn)
+}
+func addItem(conn *sqlite.Conn,item string, priority string,w http.ResponseWriter) {
+    var err error
 	stmt, err := conn.Prepare("INSERT INTO \"mylist\" (item, priority) VALUES ($f1, $f2);")
 	if err != nil {
 		fmt.Println(err)
@@ -120,9 +126,11 @@ func handle(w http.ResponseWriter, r *http.Request) {
 		fmt.Println(err)
 		fmt.Fprint(w,err)
 	}
+}
 
+func response(conn *sqlite.Conn,w http.ResponseWriter) {
 	sqlNowHere := "SELECT datetime('now','-1 day','localtime');"
-	err = sqlitex.ExecuteTransient(conn, sqlNowHere, &sqlitex.ExecOptions{
+    err := sqlitex.ExecuteTransient(conn, sqlNowHere, &sqlitex.ExecOptions{
 	  ResultFunc: func(stmt *sqlite.Stmt) error {
 	    w.Header().Set("Content-Type","application/text")
 	    messageBack := fmt.Sprintf("Hello! Here's your list (%s)\n", stmt.ColumnText(0))
@@ -137,6 +145,5 @@ func handle(w http.ResponseWriter, r *http.Request) {
         fmt.Println(err)
         fmt.Fprintln(w,err)
 	}
-	defer dbpool.Put(conn)
 }
 
