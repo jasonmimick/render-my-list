@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+    "html/template"
 	"log"
 	"net/http"
 	"os"
@@ -22,6 +23,9 @@ const (
 	sqlNowHere          = "SELECT datetime('now','-1 day','localtime');"
 )
 
+var listName string
+var startTime string
+
 // Using a Pool to execute SQL in a concurrent HTTP handler.
 func main() {
 	fmt.Println("render-my-list ---- startup")
@@ -33,6 +37,8 @@ func main() {
 	fmt.Println()
 	fmt.Println("END LOCAL ENVIRONMENT")
 
+    listName = os.Getenv("RENDER_SERVICE_SLUG")
+    startTime = "foo-the-bar"
 	var err error
 	dbpool, err = sqlitex.Open("file::memory:?cache=shared", 0, 10)
 	if err != nil {
@@ -59,6 +65,7 @@ func main() {
 	defer dbpool.Put(conn)
 
 	http.HandleFunc("/", handle)
+	http.HandleFunc("/add", addHandle)
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
@@ -66,45 +73,39 @@ func main() {
 	log.Fatal(http.ListenAndServe(":"+port, nil))
 }
 
-func executeSql(sql string, conn *sqlite.Conn, w http.ResponseWriter) {
+type NewItemUIInfo struct {
+    ListName    string
+    StartTime   string
+}
 
-	fmt.Printf("executeSql === sql:%s\n", sql)
-	stmt, err := conn.Prepare(sql)
-	if err != nil {
-		fmt.Println(err)
-		fmt.Fprint(w, err)
-	}
-	for {
-		hasRow, err := stmt.Step()
-		if err != nil {
-			fmt.Println(err)
-			if w != nil {
-				fmt.Fprint(w, err)
-			}
-		}
-		if !hasRow {
-			break
-		}
-		for i := 0; i < stmt.ColumnCount(); i++ {
-			colName := stmt.ColumnName(i)
-			fmt.Print(colName + ":" + stmt.GetText(colName))
-			if w != nil {
-				fmt.Fprint(w, colName+":"+stmt.GetText(colName))
-			}
-		}
-		fmt.Println()
-		if w != nil {
-			fmt.Fprintln(w)
-		}
+func addHandle(w http.ResponseWriter, r *http.Request) {
+    if r.Method == http.MethodGet {
+        fmt.Println("addHandle got GET")
+        t, err := template.ParseFiles("./add.tmpl.html")
+        if err != nil {
+            fmt.Println(err)
+            fmt.Fprint(w, err)
+            return
+        }
+        u := NewItemUIInfo{
+            ListName : listName,
+            StartTime : startTime,
+        }
+        t.Execute(os.Stdout, u)
+        t.Execute(w, u)
 
-	}
-
+    } else {
+        fmt.Println("addHandle NOT got GET")
+        handle(w,r)
+        
+    }
 }
 
 func handle(w http.ResponseWriter, r *http.Request) {
 	item := r.FormValue("i")
 	sort := r.FormValue("s")
 	priority := r.FormValue("p")
+	dump := r.FormValue("d")
 	fmt.Printf("Adding new (sort=%s) priority:%s item:%s\n", sort, priority, item)
 	conn := dbpool.Get(r.Context())
 	if conn == nil {
@@ -112,6 +113,7 @@ func handle(w http.ResponseWriter, r *http.Request) {
 	}
 	if item != "" {
 		addItem(conn, item, priority, w)
+        if dump != "" { response(conn,w,sort) }
 	} else {
 		response(conn, w, sort)
 	}
@@ -165,3 +167,39 @@ func response(conn *sqlite.Conn, w http.ResponseWriter, sort string) {
 		fmt.Fprintln(w, err)
 	}
 }
+
+func executeSql(sql string, conn *sqlite.Conn, w http.ResponseWriter) {
+
+	fmt.Printf("executeSql === sql:%s\n", sql)
+	stmt, err := conn.Prepare(sql)
+	if err != nil {
+		fmt.Println(err)
+		fmt.Fprint(w, err)
+	}
+	for {
+		hasRow, err := stmt.Step()
+		if err != nil {
+			fmt.Println(err)
+			if w != nil {
+				fmt.Fprint(w, err)
+			}
+		}
+		if !hasRow {
+			break
+		}
+		for i := 0; i < stmt.ColumnCount(); i++ {
+			colName := stmt.ColumnName(i)
+			fmt.Print(colName + ":" + stmt.GetText(colName))
+			if w != nil {
+				fmt.Fprint(w, colName+":"+stmt.GetText(colName))
+			}
+		}
+		fmt.Println()
+		if w != nil {
+			fmt.Fprintln(w)
+		}
+
+	}
+
+}
+
