@@ -132,7 +132,7 @@ func response(conn *sqlite.Conn,w http.ResponseWriter) {
 	sqlNowHere := "SELECT datetime('now','-1 day','localtime');"
     err := sqlitex.ExecuteTransient(conn, sqlNowHere, &sqlitex.ExecOptions{
 	  ResultFunc: func(stmt *sqlite.Stmt) error {
-	    w.Header().Set("Content-Type","application/text")
+	    //w.Header().Set("Content-Type","application/text")
 	    messageBack := fmt.Sprintf("Hello! Here's your list (%s)\n", stmt.ColumnText(0))
 	    fmt.Println(messageBack)
 	    fmt.Fprint(w, messageBack)
