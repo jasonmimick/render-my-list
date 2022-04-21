@@ -27,7 +27,10 @@ func main() {
 	fmt.Println("render-my-list ---- startup")
 	//Get all env variables
 	fmt.Println("LOCAL ENVIRONMENT")
-	fmt.Println(os.Environ())
+	for _, env := range os.Environ() {
+		fmt.Printf("%v\n", env)
+	}
+	fmt.Println()
 	fmt.Println("END LOCAL ENVIRONMENT")
 
 	var err error
@@ -144,11 +147,12 @@ func addItem(conn *sqlite.Conn, item string, priority string, w http.ResponseWri
 func response(conn *sqlite.Conn, w http.ResponseWriter, sort string) {
 	err := sqlitex.ExecuteTransient(conn, sqlNowHere, &sqlitex.ExecOptions{
 		ResultFunc: func(stmt *sqlite.Stmt) error {
-			messageBack := fmt.Sprintf("Hello! Here's your list (%s)\n", stmt.ColumnText(0))
+			appSlug := os.Getenv("RENDER_SERVICE_SLUG")
+			messageBack := fmt.Sprintf("LIST:%s:%s\n", appSlug, stmt.ColumnText(0))
 			fmt.Println(messageBack)
 			fmt.Fprint(w, messageBack)
 			sql := sqlMyList
-			if sort!="" {
+			if sort != "" {
 				sql = sqlMyListByPriority
 			}
 			executeSql(sql, conn, w)
