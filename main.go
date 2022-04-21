@@ -12,10 +12,13 @@ import (
 
 var dbpool *sqlitex.Pool
 
+var showTablesSql = "SELECT name FROM sqlite_schema WHERE type ='table' AND name NOT LIKE 'sqlite_%';"
+
+var myListSql = "SELECT item, priority from mylist;" 
 // Using a Pool to execute SQL in a concurrent HTTP handler.
 func main() {
 	var err error
-	dbpool, err = sqlitex.Open("file:memory:?mode=memory", 0, 10)
+	dbpool, err = sqlitex.Open("file::memory:?cache=shared", 0, 10)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -25,34 +28,31 @@ func main() {
 		port = "8080"
 	}
 
-	conn := dbpool.Get(context.TODO())
+    ctx := context.TODO()
+	conn := dbpool.Get(ctx)
 	if conn == nil {
+        fmt.Println("Unable to create conn from dbpool")
 		return
 	}
-	defer dbpool.Put(conn)
 	// Execute a query.
 	// Can I inject the "app name" into the table name - like "foo123-mylist"?
 	sql := "CREATE TABLE mylist (item string, priority string);"
-	   fmt.Println("Initializing new in memory 'mylist' TABLE")
-	err = sqlitex.ExecuteTransient(conn, sql, &sqlitex.ExecOptions{
-	  ResultFunc: func(stmt *sqlite.Stmt) error {
-	    fmt.Println("RESULT")
-	    fmt.Println(stmt.ColumnText(0))
-	    return nil
-	  },
-	})
-	if err != nil {
-	  fmt.Println("ERROR")
-          fmt.Println(err)
-	  //return err
+	fmt.Println("Initializing new in memory 'mylist' TABLE")
+
+    if err := sqlitex.Execute(conn, sql, nil); err != nil {
+		// handle err
+        fmt.Println("Error trying to create table")
+        fmt.Println(err)
 	}
+    runMySql(showTablesSql,conn,nil)
+	defer dbpool.Put(conn)
 	log.Fatal(http.ListenAndServe(":"+port, nil))
 }
 
-func getMyList(conn *sqlite.Conn, w http.ResponseWriter) {
+func runMySql(sql string, conn *sqlite.Conn, w http.ResponseWriter) {
 
-
-	stmt, err := conn.Prepare("SELECT item, priority from mylist;")
+    fmt.Printf("runMySql === sql:%s\n",sql)
+	stmt, err := conn.Prepare(sql)
 	if err != nil {
         	fmt.Println(err)
 	  	fmt.Fprint(w,err)
@@ -61,35 +61,43 @@ func getMyList(conn *sqlite.Conn, w http.ResponseWriter) {
 		hasRow, err := stmt.Step()
 		if err != nil {
 			fmt.Println(err)
-			fmt.Fprint(w,err)
-		}
+            if w!= nil {
+			    fmt.Fprint(w,err)
+		    }
+        }
 		if !hasRow {
 			break
 		}
-		itemInfo := fmt.Sprintf("[%s]:%s", stmt.GetText("item"), stmt.GetText("priority"))
-	    	fmt.Println( itemInfo )
-	    	fmt.Fprint(w, itemInfo )
-		
-		
+        for i:=0; i < stmt.ColumnCount(); i++ {
+            colName := stmt.ColumnName(i)
+            fmt.Print( colName+":"+stmt.GetText(colName) )
+            if w!= nil {
+                fmt.Fprint(w, colName+":"+stmt.GetText(colName) )
+            }
+        }
+        fmt.Println()
+        if w!= nil { 
+            fmt.Fprintln(w) 
+        }
+                
+        	
 	}
 
 }
 
 func handle(w http.ResponseWriter, r *http.Request) {
- 	//io.WriteString(res, "name: "+req.FormValue("name"))
-    	//io.WriteString(res, "\nphone: "+req.FormValue("phone"))
  	item := r.FormValue("i")
 	priority := r.FormValue("p")	
-	fmt.Printf("Adding new item(%s): %s", priority, item)
+	fmt.Printf("Adding new item(%s): %s\n", priority, item)
 	conn := dbpool.Get(r.Context())
 	if conn == nil {
 		return
 	}
-	defer dbpool.Put(conn)
+    //runMySql(showTablesSql,conn,w)
 	// Execute a query.
 	var err error
 
-	stmt, err := conn.Prepare("INSERT INTO mylist (item, priority) VALUES ($f1, $f2);")
+	stmt, err := conn.Prepare("INSERT INTO \"mylist\" (item, priority) VALUES ($f1, $f2);")
 	if err != nil {
 		fmt.Println(err)
 		fmt.Fprint(w,err)
@@ -97,7 +105,6 @@ func handle(w http.ResponseWriter, r *http.Request) {
 	}
 	stmt.SetText("$f1", item)
 	stmt.SetText("$f2", priority)
-	//stmt.SetInt64("$f2", int64(i))
 	hasRow, err := stmt.Step()
 	if err != nil {
 		fmt.Println(err)
@@ -118,32 +125,18 @@ func handle(w http.ResponseWriter, r *http.Request) {
 	err = sqlitex.ExecuteTransient(conn, sqlNowHere, &sqlitex.ExecOptions{
 	  ResultFunc: func(stmt *sqlite.Stmt) error {
 	    w.Header().Set("Content-Type","application/text")
-	    messageBack := fmt.Sprintf("Hello! Its %s here how, what time is it for you?", stmt.ColumnText(0))
-	    //fmt.Println(stmt.ColumnText(0))
-	    //fmt.Fprintf(w, "Hello, %q", stmt.ColumnText(0))
+	    messageBack := fmt.Sprintf("Hello! Here's your list (%s)\n", stmt.ColumnText(0))
 	    fmt.Println(messageBack)
 	    fmt.Fprint(w, messageBack)
-	    getMyList(conn, w)	    
+        runMySql(myListSql, conn, w)
+        
 	    return nil
 	  },
 	})
 	if err != nil {
-          fmt.Println(err)
-	  //return err
+        fmt.Println(err)
+        fmt.Fprintln(w,err)
 	}
-	/*
-	stmt := conn.Prep("SELECT foo FROM footable WHERE id = $id;")
-	stmt.SetText("$id", "_user_id_")
-	for {
-		if hasRow, err := stmt.Step(); err != nil {
-			// ... handle error
-		} else if !hasRow {
-			break
-		}
-		foo := stmt.GetText("foo")
-		// ... use foo
-		fmt.Fprintln(w, foo)
-	}
-	*/
+	defer dbpool.Put(conn)
 }
 
