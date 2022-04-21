@@ -9,12 +9,15 @@
 	</head>
 	<body>
         Hello! {{.ListName}} has been alive since {{.StartTime}}<br/>
-        <form method="POST" action="/?s=1&d=1">
+        <form method="POST" action="/add">
+            <input type="hidden" name="s" value="1" />
+        <input type="hidden" name="d" value="1" />
         Item:<input type="text" name="i"/><br/>
         Priority:<input type="text" name="p"/><br/>
         <input type="submit"/>
         </form>
         <br/>
         <a href="/?s=1">View your {{.ListName}} list!</a>
+        {{.YourList}}
 	</body>
 </html>

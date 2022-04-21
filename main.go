@@ -93,6 +93,22 @@ func addHandle(w http.ResponseWriter, r *http.Request) {
         }
         t.Execute(os.Stdout, u)
         t.Execute(w, u)
+        sort := r.FormValue("s")
+        dump := r.FormValue("d")
+        if dump != "" {
+
+            conn := dbpool.Get(r.Context())
+            if conn == nil {
+                return
+            }
+            sql := sqlMyList
+            if sort != "" {
+                sql = sqlMyListByPriority
+            }
+            executeSql(sql, conn, w)
+	        defer dbpool.Put(conn)
+
+        }
 
     } else {
         fmt.Println("addHandle NOT got GET")
