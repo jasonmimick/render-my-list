@@ -96,9 +96,8 @@ func handle(w http.ResponseWriter, r *http.Request) {
     if item != "" {
         addItem(conn, item, priority, w)
     } else {
-        fmt.Println("item was empty, not adding")
+        response(conn, w)
     }
-    response(conn, w)
 	defer dbpool.Put(conn)
 }
 func addItem(conn *sqlite.Conn,item string, priority string,w http.ResponseWriter) {
