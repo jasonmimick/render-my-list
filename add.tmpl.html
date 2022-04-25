@@ -9,7 +9,11 @@
 	</head>
 	<body>
         Hello! {{.ListName}} has been alive since {{.StartTime}}<br/>
-        <form method="POST" action="/add">
+        {{ if .NewItem }}
+            Add new item:<strong>Priority:{{ .NewItem.Priority }} - {{
+                .NewItem.Item }}</strong></br/>
+        {{ end }}
+        <form method="POST" action="/add?d=1&s=1">
             <input type="hidden" name="s" value="1" />
         <input type="hidden" name="d" value="1" />
         Item:<input type="text" name="i"/><br/>
@@ -18,6 +22,12 @@
         </form>
         <br/>
         <a href="/?s=1">View your {{.ListName}} list!</a>
-        {{.YourList}}
+        {{ range $row := .MyList }}
+            <li>
+            {{ range $col, $val := $row }}
+            {{ $col }}=<strong>{{ $val }}</strong><br/>
+            {{ end }}
+            </li>
+        {{ end }}
 	</body>
 </html>
